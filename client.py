@@ -1,16 +1,14 @@
 import socket
 
 # Server information
-server_ip = "127.0.0.1"
+server_ip = socket.gethostbyname("vayu.iitd.ac.in")
 server_port = 9801
 
 # Create a UDP socket
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # Send the "SendSize" command to the server
-msg = ["SendSize\n","\n"]
-client_socket.sendto(str(msg).encode("utf-8"), (server_ip, server_port))
-print(str(msg).encode("utf-"))
+client_socket.sendto("SendSize\n\n".encode('utf-8'), (server_ip, server_port))
 print("msg sent")
 
 # Receive the size response from the server
