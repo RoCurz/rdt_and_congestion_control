@@ -1,15 +1,13 @@
 import socket
 import time,threading,hashlib
 
-stop_thread = False
-
 def receive_data(sock):
     global offset_data
     global offset_received
     global stop_thread
     while not stop_thread:
         try:
-            sock.settimeout(.5)
+            sock.settimeout(.05)
             data, address = sock.recvfrom(2048)
             response = data.decode('utf-8').split('\n')
             offset = int(response[0].split(" ")[1])
@@ -22,7 +20,10 @@ def receive_data(sock):
                 if not add_to_string and substring == '':
                     add_to_string = True
             offset_data[(offset)//1448] = string[:-1]
-            print(f"{offset//1448} Received")
+            time_run = (time.time()-start_time)*1000
+            # receive_time[offset] = time_run
+            receive_time.write(f"{offset}\t{time_run:.2f}\n")
+            # print(f"{offset//1448} Received")
         except socket.timeout:
             continue
 
@@ -56,8 +57,13 @@ no_of_request = (size_to_receive+1448-1)//1448
 offset_received = [False]*no_of_request
 offset_data = [""]*no_of_request
 print("no of request: ",no_of_request)
+receive_time = open("receive.txt","w")
+request_time = open("request.txt","w")
+
 
 first_False = 0
+time.sleep(.05)
+start_time = time.time()
 while (first_False < no_of_request):
     k = 0
     frontier = []
@@ -77,12 +83,17 @@ while (first_False < no_of_request):
         else:
             numbytes = 1448
         udp_socket.sendto(f"Offset: {offset_number*1448}\nNumBytes: {numbytes}\n\n".encode('utf-8'), (server_ip, server_port))
-        # print(f"sending request for offset: {offset_number}")
+        time_run = (time.time()-start_time)*1000
+        # if offset_number*1448 in request_time:
+        #     request_time[offset_number*1448].append(str(time_run))
+        # else:
+        #     request_time[offset_number*1448] = [str(time_run)]
+        request_time.write(f"{offset_number*1448}\t{time_run:.2f}\n")
 
     receive_thread = threading.Thread(target=receive_data, args=(udp_socket, ))
     stop_thread = False
     receive_thread.start()
-    time.sleep(.5)
+    time.sleep(.05)
     stop_thread = True
     receive_thread.join()
 
@@ -106,7 +117,6 @@ udp_socket.settimeout(.5)
 data, server_address = udp_socket.recvfrom(1024)
 response = data.decode('utf-8').strip()
 print(response)
-
 
 
 
