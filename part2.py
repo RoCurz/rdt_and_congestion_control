@@ -1,15 +1,12 @@
 import socket
-import math
-import time,threading,hashlib
-
-threshold=math.inf
+import time,hashlib,math
+time_out=100
 def receive_data(sock):
     global offset_data
     global offset_received
-    global stop_thread
-    while not stop_thread:
+    while True:
         try:
-            sock.settimeout(.05)
+            sock.settimeout(.000000001)
             data, address = sock.recvfrom(2048)
             response = data.decode('utf-8').split('\n')
             offset = int(response[0].split(" ")[1])
@@ -26,12 +23,17 @@ def receive_data(sock):
             # receive_time[offset] = time_run
             receive_time.write(f"{offset}\t{time_run:.2f}\n")
             # print(f"{offset//1448} Received")
+            if (time_run>=time_out):
+                break
         except socket.timeout:
+            time_run = (time.time()-start_time)*1000
+            if (time_run>=time_out):
+                break
             continue
 
 # Server information
-server_ip = "192.168.75.1"
-server_port = 9801
+server_ip = socket.gethostbyname("vayu.iitd.ac.in")
+server_port = 9802
 
 # Create a UDP socket
 udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -43,7 +45,7 @@ while (size_to_receive==0):
 
     # Receive the size response from the server
     try:
-        udp_socket.settimeout(.05)
+        udp_socket.settimeout(.5)
         data, server_address = udp_socket.recvfrom(1024)
         response = data.decode('utf-8').strip()
 
@@ -62,21 +64,15 @@ print("no of request: ",no_of_request)
 receive_time = open("receive.txt","w")
 request_time = open("request.txt","w")
 
-
 first_False = 0
 time.sleep(.05)
-
 burst_size=1
-start_time = time.time()
+threshold=math.inf
+min_burst=1
 while (first_False < no_of_request):
-    if burst_size>=threshold:
-        burst_size+=1
-    else:
-        burst_size*=2
+    print("burst_size",burst_size)
     k = 0
     frontier = []
-    # if burst_size>10:
-    print("size: ",burst_size,"threshold: ",threshold)
     while (len(frontier)!=burst_size and ((first_False+k)<no_of_request)):
         if offset_received[first_False+k] == False:
             frontier.append(first_False+k)
@@ -84,7 +80,7 @@ while (first_False < no_of_request):
     
     if len(frontier)==0:
         break
-
+    start_time = time.time()
     for offset_number in frontier:
         if offset_number == no_of_request-1:
             numbytes = size_to_receive%1448
@@ -99,26 +95,23 @@ while (first_False < no_of_request):
         # else:
         #     request_time[offset_number*1448] = [str(time_run)]
         request_time.write(f"{offset_number*1448}\t{time_run:.2f}\n")
-    receive_thread = threading.Thread(target=receive_data, args=(udp_socket, ))
-    stop_thread = False
-    receive_thread.start()
-    time.sleep(.05)
-    stop_thread = True
-    receive_thread.join()
-    congestion = False
-    count=0
+    receive_data(udp_socket)
+    has_false = False
     for offset_number in frontier:
         if offset_received[offset_number] == False:
-            if (count==0):
-                first_False = offset_number
-            if (count==math.ceil(burst_size/13)):
-                congestion=True
-                threshold=int(burst_size/2)
-                burst_size=1
-                break
-            count+=1
-    if not congestion:
-        first_False = frontier[-1]+1
+            first_False = offset_number
+            has_false = True
+            threshold=max(int(burst_size/2),1)
+            burst_size=min_burst
+            print("dropped")
+            break
+    if not has_false:
+        first_False = frontier[-1] + 1
+        min_burst=max(burst_size,min_burst)
+        if(burst_size>threshold):
+            burst_size += 1
+        else:
+            burst_size *= 2
 
 
 full_data = ''.join(offset_data)
@@ -131,8 +124,5 @@ udp_socket.settimeout(.5)
 data, server_address = udp_socket.recvfrom(2048)
 response = data.decode('utf-8').strip()
 print(response)
-
-
-
 # Close the client socket
 udp_socket.close()
