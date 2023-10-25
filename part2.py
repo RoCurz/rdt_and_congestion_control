@@ -23,7 +23,7 @@ def receive_data(sock):
                     add_to_string = True
             offset_data[(offset)//1448] = string[:-1]
             # time_in_program = (time.time()-start_time)*1000
-            # receive_time.write(f"{offset}\t{time_in_program:.2f}\n")
+            # print(f"{time_in_program:.2f}\t{offset}")
             # print(f"{offset//1448} Received")
             time_run = (time.time()-msg_time)*1000
             if (time_run>=time_out):
@@ -96,7 +96,7 @@ while (first_False < no_of_request):
             numbytes = 1448
         udp_socket.sendto(f"Offset: {offset_number*1448}\nNumBytes: {numbytes}\n\n".encode('utf-8'), (server_ip, server_port))
         # time_in_program = (time.time()-start_time)*1000
-        # request_time.write(f"{offset_number*1448}\t{time_in_program:.2f}\n")
+        # print(f"{offset_number*1448}\t{time_in_program:.2f}\n")
     Squished = 0
     receive_data(udp_socket)
     time_in_program = (time.time()-start_time)*1000
