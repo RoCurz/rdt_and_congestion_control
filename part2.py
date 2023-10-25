@@ -73,6 +73,7 @@ time.sleep(.0005)
 burst_size=1
 threshold=math.inf
 min_burst=1
+print("Time\tBrust Size\tSquished")
 while (first_False < no_of_request):
     # print(f"burst_size:\t{burst_size}")
     # print(f"threshold:\t{threshold}")
@@ -100,6 +101,9 @@ while (first_False < no_of_request):
     receive_data(udp_socket)
     time_in_program = (time.time()-start_time)*1000
     print(f"{time_in_program:.2f}\t{burst_size}\t{Squished}")
+    if Squished:
+        min_burst //= 2
+        threshold //= 2
     has_false = False
     for offset_number in frontier:
         if offset_received[offset_number] == False:
@@ -112,7 +116,7 @@ while (first_False < no_of_request):
     if not has_false:
         first_False = frontier[-1] + 1
         min_burst=max(burst_size,min_burst)
-        if(burst_size>threshold):
+        if(burst_size>=threshold):
             burst_size += 1
         else:
             burst_size *= 2
