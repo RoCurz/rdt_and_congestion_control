@@ -1,6 +1,8 @@
 import socket
 import time,hashlib,math
-time_out=100
+time_out=60
+learning_time=15
+learning_delta=3
 def receive_data(sock):
     global offset_data
     global offset_received
@@ -22,7 +24,7 @@ def receive_data(sock):
                 if not add_to_string and substring == '':
                     add_to_string = True
             offset_data[(offset)//1448] = string[:-1]
-            # time_in_program = (time.time()-start_time)*1000
+            time_in_program = (time.time()-start_time)*1000
             # print(f"{time_in_program:.2f}\t{offset}")
             # print(f"{offset//1448} Received")
             time_run = (time.time()-msg_time)*1000
@@ -35,7 +37,9 @@ def receive_data(sock):
             continue
 
 # Server information
-server_ip =  "10.17.7.134"#socket.gethostbyname("vayu.iitd.ac.in")
+server_ip =  "vayu.iitd.ac.in"
+server_ip =  "10.17.6.5"
+
 server_port = 9802
 
 # Create a UDP socket
@@ -72,8 +76,11 @@ first_False = 0
 time.sleep(.0005)
 burst_size=1
 threshold=math.inf
+drop_rate=0
+dropped_bursts=0
+total_drops = 0
 min_burst=1
-print("Time\tBrust Size\tSquished")
+# print("Time\tBrust Size\tSquished")
 while (first_False < no_of_request):
     # print(f"burst_size:\t{burst_size}")
     # print(f"threshold:\t{threshold}")
@@ -96,48 +103,72 @@ while (first_False < no_of_request):
             numbytes = 1448
         udp_socket.sendto(f"Offset: {offset_number*1448}\nNumBytes: {numbytes}\n\n".encode('utf-8'), (server_ip, server_port))
         # time_in_program = (time.time()-start_time)*1000
-        # print(f"{offset_number*1448}\t{time_in_program:.2f}\n")
+        # request_time.write(f"{offset_number*1448}\t{time_in_program:.2f}\n")
     Squished = 0
     receive_data(udp_socket)
-    time_in_program = (time.time()-start_time)*1000
-    print(f"{time_in_program:.2f}\t{burst_size}\t{Squished}")
     if Squished:
-        min_burst = max(1,min_burst//2)
-        threshold = max(1,threshold//2)
+        threshold //= 2
+        min_burst //= 2
     has_false = False
+    read_time=time.time()-start_time
+    count=0
     for offset_number in frontier:
         if offset_received[offset_number] == False:
-            first_False = offset_number
-            has_false = True
+            if count==0:
+                first_False = offset_number
+                has_false = True
+                dropped_bursts+=1
+            count+=1
+    total_drops += count
+    # print(burst_size,count,drop_rate)
+    if has_false:
+        if read_time<=learning_time:
+            drop_rate=round((total_drops)/dropped_bursts)
+            # print(f"({drop_rate}*({dropped_bursts}-1)+{count})//{dropped_bursts}")
             threshold=max(int(burst_size/2),1)
-            burst_size = min_burst
-            # print("dropped")
-            break
+            burst_size=max(min_burst-learning_delta,1)
+        elif count>=drop_rate:
+            burst_size-=(count-drop_rate)
+            burst_size=max(burst_size,1)
+        else:
+            burst_size += 1
+            
     if not has_false:
         first_False = frontier[-1] + 1
-        min_burst=max(burst_size,min_burst)
-        if(burst_size>=threshold):
-            burst_size += 1
+        if read_time<=learning_time:
+            min_burst=max(min_burst,burst_size)
+            if(burst_size>=threshold):
+                burst_size += 1
+            else:
+                burst_size *= 2
         else:
-            burst_size *= 2
-
+            burst_size += 1
+    time_in_program = (time.time()-start_time)*1000
+    print(f"{time_in_program:.2f}\t{len(frontier)}\t{count}\t{drop_rate}")
 
 full_data = ''.join(offset_data)
-for i in range(no_of_request):
-    if not offset_received[i]:
-        print(i)
-print("First False:",first_False)
 md5_hash = hashlib.md5()
+print(f"First false:\t{first_False}")
 md5_hash.update(full_data.encode('utf-8'))
 md5_hex = md5_hash.hexdigest()
 print(md5_hex)
 udp_socket.sendto(f"Submit: 2021CS10121@lol\nMD5: {md5_hex}\n\n".encode('utf-8'), (server_ip, server_port))
-udp_socket.settimeout(.5)
-data, server_address = udp_socket.recvfrom(2048)
+response_received = False
+while (not response_received):
+    # Receive the size response from the server
+    try:
+        udp_socket.settimeout(.5)
+        data, server_address = udp_socket.recvfrom(1024)
+        response = data.decode('utf-8').strip()
+
+        # Extract and print the size
+        if response.startswith("Result:"):
+            response_received = True
+        else:
+            raise socket.timeout
+    except socket.timeout:
+        continue
 response = data.decode('utf-8').strip()
 print(response)
 # Close the client socket
 udp_socket.close()
-
-#8778ba5c6aa062c0e65fa6789949ba5e
-#103498de7c685fa2ee0b1b8a4926a9a7
